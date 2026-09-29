@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bomet-green: #2e8b57;
+  --color-bomet-blue: #1e90ff;
+  --color-bomet-gold: #ffc107;
+  --color-bomet-gray: #f3f4f6;
+  --color-bomet-dark: #111827;
+}
+
+body {
+  background-color: var(--color-bomet-gray);
+  color: var(--color-bomet-dark);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
