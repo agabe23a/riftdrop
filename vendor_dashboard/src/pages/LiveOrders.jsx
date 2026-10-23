@@ -1,13 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import apiClient from '../api/client';
 
 const LiveOrders = () => {
   const [orders, setOrders] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
   const ws = useRef(null);
 
+  const acceptOrder = async (orderId) => {
+    try {
+      await apiClient.post(`/logistics/orders/${orderId}/accept`);
+      setOrders((previous) => previous.map((order) => order.id === orderId ? { ...order, status: 'PACKING' } : order));
+    } catch (error) {
+      window.alert(error.response?.data?.detail || 'Unable to accept this order.');
+    }
+  };
+
   // In production, we pull the exact store_id and token from Auth context/localStorage
-  const userString = localStorage.getItem('riftdrop_user');
   const storeId = localStorage.getItem('riftdrop_store_id');
   const token = localStorage.getItem('riftdrop_token');
 
@@ -58,11 +67,6 @@ const LiveOrders = () => {
       }
     };
   }, [storeId, token]);
-
-  const acceptOrder = (orderId) => {
-    // We will wire this to a POST request later to change order status to ACCEPTED
-    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'PACKING' } : o));
-  };
 
   return (
     <div className="p-8 max-w-6xl mx-auto">

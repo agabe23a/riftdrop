@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import {
   MapPin,
   Navigation,
-  DollarSign,
   CheckCircle,
   AlertTriangle,
   KeyRound,
@@ -20,8 +19,6 @@ const RiderRadar = () => {
   const ws = useRef(null);
 
   // In production, grab the rider's ID from the JWT token memory
-  const userString = localStorage.getItem("riftdrop_user");
-  const riderId = userString ? JSON.parse(userString).id : 3; // Fallback for testing
   const token = localStorage.getItem("riftdrop_token");
 
   // --- 1. THE WEBSOCKET RADAR ---
@@ -31,7 +28,7 @@ const RiderRadar = () => {
       return;
     }
 
-    const wsUrl = `ws://127.0.0.1:8000/api/v1/logistics/ws/rider/${riderId}?token=${token}`;
+    const wsUrl = `ws://127.0.0.1:8000/api/v1/logistics/ws/rider?token=${token}`;
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onopen = () =>
@@ -58,13 +55,12 @@ const RiderRadar = () => {
       setConnectionStatus("Radar Offline. Reconnecting...");
 
     return () => ws.current && ws.current.close();
-  }, [riderId, token]);
+  }, [token]);
 
   // --- 2. CLAIMING THE JOB ---
   const handleClaimJob = async (job) => {
     try {
-      // Hit the backend to lock this order to this specific rider
-      // await apiClient.post(`/logistics/${job.order_id}/claim`);
+      await apiClient.post(`/logistics/claim-order/${job.order_id}`);
 
       // Move from "Available" to "Active"
       setActiveJob(job);
@@ -87,16 +83,11 @@ const RiderRadar = () => {
     }
 
     try {
-      // The Million Dollar API Call: Verifies PIN and releases Escrow funds
-      // await apiClient.post(`/logistics/${activeJob.order_id}/complete`, { pin: pinInput });
-
-      alert(
-        `Success! KES ${activeJob.payout} has been released to your M-Pesa.`,
-      );
+      await apiClient.post(`/logistics/complete-delivery/${activeJob.order_id}`, { pin: pinInput });
       setActiveJob(null);
       setPinInput("");
-    } catch (err) {
-      setError("Incorrect PIN. Delivery not completed.");
+    } catch (error) {
+      setError(error.response?.data?.detail || "Delivery not completed.");
     }
   };
 
@@ -178,7 +169,7 @@ const RiderRadar = () => {
                   placeholder="Enter PIN"
                   value={pinInput}
                   onChange={(e) =>
-                    setPinInput(e.e.target.value.replace(/\D/g, ""))
+                    setPinInput(e.target.value.replace(/\D/g, ""))
                   }
                   className="bg-transparent w-full text-center text-3xl tracking-[0.5em] font-black text-white outline-none"
                 />

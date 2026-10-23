@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, MapPin, Tag, Loader2, Navigation } from 'lucide-react';
+import { Store, Tag, Loader2, Navigation } from 'lucide-react';
 import apiClient from '../api/client';
 
 const StoreOnboarding = () => {

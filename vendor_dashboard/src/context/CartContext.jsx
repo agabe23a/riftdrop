@@ -19,7 +19,12 @@ export const CartProvider = ({ children }) => {
   }, [cartItems]);
 
   const addToCart = (product) => {
+    let added = true;
     setCartItems((prevCart) => {
+      if (prevCart.length && prevCart[0].store_id !== product.store_id) {
+        added = false;
+        return prevCart;
+      }
       // Check if the item is already in the cart
       const existingItem = prevCart.find((item) => item.inventory_id === product.inventory_id);
       
@@ -35,6 +40,7 @@ export const CartProvider = ({ children }) => {
       // If it's new, add it with a quantity of 1
       return [...prevCart, { ...product, quantity: 1 }];
     });
+    return added;
   };
 
   const removeFromCart = (inventory_id) => {

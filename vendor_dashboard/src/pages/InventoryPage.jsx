@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Search, Plus, Edit, Trash2, Package, X, Loader2 } from "lucide-react";
 import apiClient from "../api/client";
 
@@ -8,6 +8,8 @@ const InventoryPage = () => {
 
   // State for the API data
   const [masterCatalog, setMasterCatalog] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [inventoryError, setInventoryError] = useState('');
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -15,25 +17,19 @@ const InventoryPage = () => {
   const [vendorPrice, setVendorPrice] = useState("");
   const [stockQuantity, setStockQuantity] = useState("");
 
-  // Temporary mock data for the table until we fetch the store's specific inventory
-  const mockInventory = [
-    {
-      id: 1,
-      name: "Soko Sifted Maize Meal 2kg",
-      category: "Grocery & Food",
-      price: 210,
-      stock: 45,
-      status: "In Stock",
-    },
-    {
-      id: 2,
-      name: "Samsung Galaxy A14",
-      category: "Electronics",
-      price: 18500,
-      stock: 4,
-      status: "Low Stock",
-    },
-  ];
+  const storeId = localStorage.getItem('riftdrop_store_id') || 1; // Fallback to 1 for testing
+
+  const fetchStoreInventory = useCallback(async () => {
+    if (!storeId) return;
+    try {
+      const response = await apiClient.get(`/stores/${storeId}/inventory`);
+      setInventory(response.data);
+    } catch (error) {
+      setInventoryError(error.response?.data?.detail || 'Unable to load your inventory.');
+    }
+  }, [storeId]);
+
+  useEffect(() => { fetchStoreInventory(); }, [fetchStoreInventory]);
 
   // Fetch the Master Catalog from FastAPI when the modal opens
   useEffect(() => {
@@ -53,32 +49,6 @@ const InventoryPage = () => {
     }
   }, [isModalOpen]);
 
-  const handleAddProduct = async (e) => {
-    e.preventDefault();
-
-    try {
-      // FORCE DATATYPES TO MATCH FASTAPI PYDANTIC SCHEMA
-      const payload = {
-        product_id: Number(selectedProductId), // Integer
-        price: parseFloat(priceInput), // Float
-        stock_quantity: parseInt(stockInput || 10, 10), // Integer
-      };
-
-      const storeId = localStorage.getItem("riftdrop_store_id") || 1;
-
-      const response = await apiClient.post(
-        `/stores/${storeId}/inventory`,
-        payload,
-      );
-      alert("Success! Product added to shelf.");
-
-      // Refresh list
-      fetchStoreInventory();
-    } catch (err) {
-      console.error("422 Error Details:", err.response?.data?.detail);
-      alert("Failed to add product. Check browser console Network tab.");
-    }
-  };
   // Handle saving the item to the vendor's inventory
   const handleSaveInventory = async () => {
     if (!selectedProductId || !vendorPrice || !stockQuantity) {
@@ -86,19 +56,27 @@ const InventoryPage = () => {
       return;
     }
 
+    const finalProductId = parseInt(selectedProductId, 10);
+    const finalPrice = parseFloat(vendorPrice);
+    const finalStock = parseInt(stockQuantity, 10);
+
+    if (isNaN(finalProductId) || isNaN(finalPrice) || isNaN(finalStock)) {
+      alert("System Error: Ensure all fields contain valid numbers.");
+      return;
+    }
+
     setIsSaving(true);
     try {
-      // NOTE: We are hardcoding store_id = 1 for now.
-      // We will address this architectural gap next.
-      const storeId = 1;
+      const payload = {
+        product_id: finalProductId,
+        price: finalPrice, 
+        stock_quantity: finalStock,
+      };
 
-      await apiClient.post(`/stores/${storeId}/inventory`, {
-        product_id: parseInt(selectedProductId),
-        price: parseFloat(vendorPrice),
-        stock_quantity: parseInt(stockQuantity),
-      });
+      await apiClient.post(`/stores/${storeId}/inventory`, payload);
 
       alert("Product successfully added to your store!");
+      await fetchStoreInventory();
       setIsModalOpen(false);
 
       // Clear inputs for next time
@@ -106,8 +84,11 @@ const InventoryPage = () => {
       setVendorPrice("");
       setStockQuantity("");
     } catch (error) {
-      console.error("Save failed:", error);
-      alert("Failed to save product to inventory.");
+      console.error("Save failed:", error.response?.data || error.message);
+      const errorMsg = error.response?.data?.detail
+      ? JSON.stringify(error.response.data.detail)
+      : "Failed to save product to inventory.";
+      alert(`Error: ${errorMsg}`);
     } finally {
       setIsSaving(false);
     }
@@ -150,43 +131,44 @@ const InventoryPage = () => {
         </div>
       </div>
 
-      {/* Data Table (Mock Data) */}
+      {inventoryError && <p className="text-sm text-red-600">{inventoryError}</p>}
+      
+      {/* Data Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Product
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Price (KES)
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Stock
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                  Actions
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price (KES)</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {mockInventory.map((item) => (
+              {inventory
+                .filter((item) => {
+                  const productName = item.product?.name || "";
+                  return productName.toLowerCase().includes(searchTerm.toLowerCase());
+                })
+                .map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                        <Package className="text-gray-400" size={20} />
+                      <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                        {item.product?.image_url ? (
+                            <img src={item.product.image_url} alt={item.product.name} className="h-full w-full object-cover" />
+                        ) : (
+                            <Package className="text-gray-400" size={20} />
+                        )}
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
-                          {item.name}
+                          {item.product?.name || "Unknown Product"}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {item.category.name}
+                          Barcode: {item.product?.barcode || "N/A"}
                         </div>
                       </div>
                     </div>
@@ -195,13 +177,13 @@ const InventoryPage = () => {
                     {item.price.toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {item.stock}
+                    {item.stock_quantity}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
-                      className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${item.stock > 10 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}
+                      className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${item.stock_quantity > 10 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
                     >
-                      {item.status}
+                      {item.stock_quantity > 10 ? 'In Stock' : 'Low Stock'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -226,13 +208,8 @@ const InventoryPage = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Add Product to Store
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
+              <h3 className="text-lg font-semibold text-gray-900">Add Product to Store</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
                 <X size={24} />
               </button>
             </div>
@@ -240,40 +217,34 @@ const InventoryPage = () => {
             <div className="p-6 overflow-y-auto flex-1">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Select from Master Catalog
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select from Master Catalog</label>
                   {isLoadingCatalog ? (
                     <div className="flex items-center text-sm text-gray-500 py-2">
-                      <Loader2 className="animate-spin mr-2 h-4 w-4" /> Loading
-                      official products...
+                      <Loader2 className="animate-spin mr-2 h-4 w-4" /> Loading official products...
                     </div>
                   ) : (
                     <select
+                      className="w-full border rounded p-2"
                       value={selectedProductId}
                       onChange={(e) => setSelectedProductId(e.target.value)}
-                      className="block w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-bomet-blue focus:border-bomet-blue text-sm"
                     >
-                      <option value="">-- Choose a product --</option>
-                      {masterCatalog.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name}
+                      <option value="" disabled>-- Choose a product --</option>
+                      {masterCatalog.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
                         </option>
                       ))}
                     </select>
                   )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    You must select an official RiftDrop catalog item.
-                  </p>
+                  <p className="text-xs text-gray-500 mt-1">You must select an official RiftDrop catalog item.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Your Price (KES)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Your Price (KES)</label>
                     <input
                       type="number"
+                      step="0.01"
                       placeholder="e.g. 250"
                       className="block w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-bomet-blue text-sm"
                       value={vendorPrice}
@@ -281,9 +252,7 @@ const InventoryPage = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Stock Quantity
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity</label>
                     <input
                       type="number"
                       placeholder="e.g. 50"
@@ -310,12 +279,8 @@ const InventoryPage = () => {
                 className="px-4 py-2 flex items-center text-sm font-medium text-white bg-bomet-green hover:bg-green-700 rounded-lg transition-colors shadow-sm disabled:opacity-50"
               >
                 {isSaving ? (
-                  <>
-                    <Loader2 className="animate-spin mr-2 h-4 w-4" /> Saving...
-                  </>
-                ) : (
-                  "Save to Inventory"
-                )}
+                  <><Loader2 className="animate-spin mr-2 h-4 w-4" /> Saving...</>
+                ) : ("Save to Inventory")}
               </button>
             </div>
           </div>

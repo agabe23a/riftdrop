@@ -35,8 +35,8 @@ const SearchResults = () => {
           params: { query, user_lat: lat, user_lng: lng, max_distance_km: 5.0 }
         });
         setData(response.data);
-      } catch (err) {
-        setError("Failed to fetch results. Please try again.");
+      } catch (error) {
+        setError(error.response?.data?.detail || "Failed to fetch results. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -60,13 +60,13 @@ const SearchResults = () => {
   }, [query, navigate]);
 
   const handleAddToCart = (item) => {
-    addToCart({
+    const added = addToCart({
       inventory_id: item.inventory_id,
       name: item.product_name || item.name, 
       price: item.financials ? item.financials.product_price : item.price,
       store_id: item.store_id
     });
-    // Optional: You could add a toast notification here saying "Added to Cart!"
+    if (!added) setError('Your cart contains items from another store. Complete or clear that cart first.');
   };
 
   return (

@@ -12,7 +12,6 @@ import LiveOrders from './pages/LiveOrders';
 import RiderRadar from './pages/RiderRadar';
 
 const OverviewPage = () => <div className="p-6"><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">Welcome to your RiftDrop Dashboard.</div></div>;
-const OrdersPage = () => <div className="p-6"><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">Live Orders Coming Soon</div></div>;
 
 function App() {
   return (

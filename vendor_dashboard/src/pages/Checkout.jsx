@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, MapPin, Smartphone, Loader2, ArrowLeft, ShoppingCart } from 'lucide-react';
+import { ShieldCheck, Loader2, ArrowLeft, ShoppingCart } from 'lucide-react';
 import apiClient from '../api/client';
 import { useCart } from '../context/CartContext';
 
@@ -15,7 +15,6 @@ const Checkout = () => {
   const { cartItems, getCartTotal, clearCart } = useCart();
   
   // 2. Setup state
-  const [phone, setPhone] = useState('07');
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState('');
   const [error, setError] = useState('');
@@ -33,11 +32,6 @@ const Checkout = () => {
       return;
     }
 
-    if (phone.length < 10) {
-      setError("Please enter a valid phone number (e.g., 0712345678)");
-      return;
-    }
-
     if (!storeId) {
       setError("Store information is missing from the cart.");
       return;
@@ -50,7 +44,6 @@ const Checkout = () => {
       // Step A: Send Zero-Trust Payload to Backend
       const payload = {
         store_id: storeId,
-        phone_number: phone,
         delivery_lat: -0.7894, // In production, we pull this from device GPS
         delivery_lng: 35.3281,
         items: cartItems.map(item => ({
@@ -146,22 +139,7 @@ const Checkout = () => {
           </div>
 
           <form onSubmit={handleCheckout}>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              M-Pesa Phone Number
-            </label>
-            <div className="relative mb-6">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Smartphone className="text-gray-400" size={20} />
-              </div>
-              <input
-                type="tel"
-                required
-                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-medium text-lg tracking-wide"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={isProcessing}
-              />
-            </div>
+            <p className="mb-6 text-sm text-gray-600">The secure M-Pesa prompt will be sent to the verified phone number on your RiftDrop account.</p>
 
             <button
               type="submit"

@@ -28,7 +28,6 @@ const LoginPage = () => {
         },
       });
       
-      const token = response.data.access_token;
       const user = response.data.user;
 
 
