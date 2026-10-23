@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, ExpiredSignatureError, jwt
+import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from pydantic import ValidationError
@@ -31,13 +31,13 @@ async def get_current_user(
             print("🚨 JWT ERROR: 'sub' (user_id) is missing from the token payload!")
             raise credentials_exception
             
-    except ExpiredSignatureError as e:
+    except jwt.ExpiredSignatureError as e:
         print(f"🚨 JWT EXPIRED: {str(e)}")
         raise credentials_exception
-    except PyJWTError as e:
+    except jwt.PyJWTError as e:
         print(f"🚨 JWT VERIFICATION FAILED: {str(e)}")
         raise credentials_exception
-    except Error as e:
+    except ValidationError as e:
         print(f"🚨 JWT VALIDATION ERROR: {str(e)}")
         raise credentials_exception
     
@@ -60,7 +60,7 @@ def require_role(required_role: UserRole):
         if current_user.role != required_role:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, 
-                detail=f"Operation not permitted. Requires {required_roles.value} privileges."
+                detail=f"Operation not permitted. Requires {required_role.value} privileges."
             )
         return current_user
     return role_checker

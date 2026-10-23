@@ -9,6 +9,7 @@ from app.core.websockets import manager
 from app.modules.auth.models import User, UserRole
 from app.modules.orders.models import Order, OrderState
 from app.modules.logistics.fulfillment import FulfillmentService
+from app.modules.stores.models import Store
 
 router = APIRouter(prefix="/logistics", tags=["Real-Time Dispatch"])
 
@@ -40,6 +41,21 @@ async def rider_websocket_endpoint(websocket: WebSocket):
 # ==========================================
 # 🏍️ RIDER ACTIONS
 # ==========================================
+@router.post("/orders/{order_id}/accept")
+async def accept_order(order_id: int, db: AsyncSession = Depends(get_db), current_vendor: User = Depends(require_role(UserRole.VENDOR))):
+    order = (await db.execute(select(Order).where(Order.id == order_id))).scalars().first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    store = (await db.execute(select(Store).where(Store.id == order.store_id))).scalars().first()
+    if not store or store.owner_id != current_vendor.id:
+        raise HTTPException(status_code=403, detail="You do not own this order's store")
+    if order.status != OrderState.PAID_IN_ESCROW:
+        raise HTTPException(status_code=409, detail="Order cannot be accepted in its current state")
+    order.status = OrderState.ACCEPTED_BY_VENDOR
+    await db.commit()
+    await manager.broadcast_to_riders({"event": "NEW_DELIVERY_AVAILABLE", "order_id": order.id, "payout": str(order.delivery_fee)})
+    return {"message": "Order accepted and sent to riders"}
+
 @router.post("/claim-order/{order_id}")
 async def claim_order(
     order_id: int, 
@@ -57,7 +73,7 @@ async def claim_order(
         raise HTTPException(status_code=404, detail="Order not found.")
         
     # 2. Check if another rider already claimed it
-    if order.status != OrderState.PAID_IN_ESCROW:
+    if order.status != OrderState.ACCEPTED_BY_VENDOR:
         raise HTTPException(status_code=400, detail="Too late! This order has already been claimed or is unavailable.")
 
     # 3. Lock the order to this specific rider

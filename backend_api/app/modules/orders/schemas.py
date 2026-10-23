@@ -1,40 +1,16 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
-from datetime import datetime
-from app.modules.orders.models import OrderState
+from typing import Annotated
 
-# --- INCOMING DATA (From the Frontend Cart) ---
+from pydantic import BaseModel, Field
+
+
 class CartItem(BaseModel):
-    product_id: int
-    quantity: int = Field(..., gt=0)
+    inventory_id: int = Field(gt=0)
+    quantity: int = Field(gt=0, le=100)
+
 
 class CheckoutRequest(BaseModel):
-    store_id: int
-    delivery_lat: float
-    delivery_lng: float
-    items: List[CartItem]
-
-class StoreInventoryCreate(BaseModel):
-    product_id: int = Field(..., gt=0, description="Master Product ID")
-    price: float = Field(..., gt=0.0, description="Item price in KES")
-    stock_quantity: int = Field(default=10, ge=0, description="Available inventory count")
-    
-# --- OUTGOING DATA (Response back to the App) ---
-class PricingBreakdown(BaseModel):
-    cart_total: float
-    distance_km: float
-    raw_delivery_fee: float
-    discount_applied: float
-    final_delivery_fee: float
-    grand_total: float
-    psychology_nudge: str
-
-class OrderResponse(BaseModel):
-    id: int
-    store_id: int
-    status: OrderState
-    pricing: PricingBreakdown
-    created_at: datetime
-
-    class Config:
-        from_attributes = True     
+    store_id: int = Field(gt=0)
+    delivery_lat: float = Field(ge=-90, le=90)
+    delivery_lng: float = Field(ge=-180, le=180)
+    items: list[CartItem] = Field(min_length=1, max_length=50)
+    phone_number: Annotated[str, Field(min_length=10, max_length=15, description="Customer's phone number for delivery updates")]

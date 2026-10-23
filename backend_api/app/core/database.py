@@ -1,25 +1,27 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
+
 from app.core.config import settings
 
-# The engine communicates with the database
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=True, # Prints SQL queries to the terminal for debugging
-    future=True
-)
-
-# The session factory creates database sessions for each request
-AsyncSessionLocal = async_sessionmaker(
-    engine, 
-    class_=AsyncSession, 
-    expire_on_commit=False
-)
-
-# All our future database models will inherit from this Base
+engine = create_async_engine(settings.DATABASE_URL, echo=settings.SQL_ECHO, pool_pre_ping=True)
+AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
-# Dependency to inject the database session into our routes
+
+@event.listens_for(Engine, "connect")
+def enable_sqlite_foreign_keys(dbapi_connection, _):
+    if settings.DATABASE_URL.startswith("sqlite"):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
 async def get_db():
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise

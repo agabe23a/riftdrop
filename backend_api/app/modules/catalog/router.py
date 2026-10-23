@@ -8,27 +8,18 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_role
 from app.modules.auth.models import User, UserRole
-from app.modules.catalog.models import MasterProduct
-from app.modules.catalog.schemas import CatalogItemResponse, MasterProductCreate
-
-# --- SCHEMAS ---
-class MasterProductCreate(BaseModel):
-    name: str
-    category: str
-    image_url: Optional[str] = None
-    barcode: Optional[str] = None
-    base_description: Optional[str] = None
-
-class MasterProductResponse(MasterProductCreate):
-    id: int
-
-    class Config:
-        from_attributes = True
+from app.modules.catalog.models import Category, MasterProduct
+from app.modules.catalog.schemas import MasterProductCreate
+from app.modules.catalog.classifier import suggest_categories
 
 # --- ROUTER ---
 router = APIRouter(prefix="/catalog", tags=["Master Catalog"])
 
-@router.post("/", response_model=MasterProductResponse, status_code=status.HTTP_201_CREATED)
+@router.get("/suggest-category")
+async def suggest_category(name: str, db: AsyncSession = Depends(get_db)):
+    return {"suggestions": await suggest_categories(db, name)}
+
+@router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_master_product(
     product_in: MasterProductCreate,
     db: AsyncSession = Depends(get_db),
@@ -42,6 +33,9 @@ async def create_master_product(
         if result.scalars().first():
             raise HTTPException(status_code=400, detail="Product with this barcode already exists.")
 
+    category = (await db.execute(select(Category).where(Category.id == product_in.category_id))).scalar_one_or_none()
+    if not category:
+        raise HTTPException(status_code=422, detail="Unknown category")
     new_product = MasterProduct(**product_in.model_dump())
     db.add(new_product)
     await db.commit()

@@ -25,6 +25,7 @@ class User(Base):
     # Safety and Security Flags
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)  # Flips to true after OTP verification
+    is_super_admin = Column(Boolean, default=False, nullable=False)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -38,6 +39,7 @@ class OTPVerification(Base):
     otp_code = Column(String, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     is_used = Column(Boolean, default=False)
+    attempts = Column(Integer, default=0, nullable=False)
 
 class CustomerAddress(Base):
     __tablename__ = "customer_addresses"

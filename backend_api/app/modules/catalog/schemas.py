@@ -1,11 +1,11 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 
 
 class MasterProductCreate(BaseModel):
-    name: str
-    category_id: int  # Ensure this is an ID to link properly in the database
+    name: str = Field(min_length=2, max_length=160)
+    category_id: int = Field(gt=0)
     image_url: Optional[str] = None
     barcode: Optional[str] = None
     base_description: Optional[str] = None 

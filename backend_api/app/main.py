@@ -14,36 +14,27 @@ from app.modules.orders.router import router as orders_router
 from app.modules.logistics.router import router as logistics_router
 from app.modules.utilities.router import router as utils_router
 from app.modules.discovery.router import router as discovery_router
+from app.modules.admin.router import router as admin_router
 
 def create_app() -> FastAPI:
-    app = FastAPI(
-        title=settings.PROJECT_NAME,
-        version=settings.VERSION,
-        openapi_url=f"{settings.API_V1_STR}/openapi.json"
-    )
-    app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
+    app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, openapi_url=f"{settings.API_V1_STR}/openapi.json")
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173", 
-            "http://localhost:5174",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1:5174"
-        ],
-            
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
     )
 
     @app.on_event("startup")
     async def startup_event():
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-        async with AsyncSessionLocal() as db:
-            await seed_categories(db)
+        # Development convenience only. Production schema changes must run through migrations.
+        if settings.ENVIRONMENT != "production":
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            async with AsyncSessionLocal() as db:
+                await seed_categories(db)
 
     # --- Mount Domain Modules ---
     app.include_router(auth_router, prefix=settings.API_V1_STR)
@@ -52,8 +43,8 @@ def create_app() -> FastAPI:
     app.include_router(orders_router, prefix=settings.API_V1_STR)
     app.include_router(logistics_router, prefix=settings.API_V1_STR)
     app.include_router(utils_router, prefix=settings.API_V1_STR)
-    app.include_router(stores_router, prefix=settings.API_V1_STR)
     app.include_router(discovery_router, prefix=settings.API_V1_STR)
+    app.include_router(admin_router, prefix=settings.API_V1_STR)
 
     @app.get("/health", tags=["System"])
     async def health_check():

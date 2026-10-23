@@ -1,36 +1,23 @@
-from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
+from decimal import Decimal
+from typing import Optional
+from pydantic import BaseModel, Field
+
+class StoreCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=160, description="Public name of the store")
+    category_id: int = Field(..., gt=0)
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="GPS Latitude")
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="GPS Longitude")
 
 class StoreInventoryCreate(BaseModel):
-    product_id: int
-    price: float
-    stock_quantity: int = 10
-    is_available: bool = True
+    product_id: int = Field(..., gt=0, description="ID referencing the Master Catalog")
+    # Decimal prevents M-Pesa fraction errors. max_digits=12 handles up to 9,999,999,999.99 KES
+    price: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2, description="Vendor's exact price")
+    stock_quantity: int = Field(default=10, ge=0, le=1_000_000, description="Units on hand")
+    is_available: bool = Field(default=True, description="Toggles customer visibility instantly")
 
-# --- VENDOR SCHEMAS (Data Coming In) ---
-class StoreCreate(BaseModel):
-    name: str
-    category: str
-    location_lat: Optional[float] = None
-    location_lng: Optional[float] = None
-
-
-class InventoryAdd(BaseModel):
-    product_id: int
-    price: float
-    stock_quantity: int = 10
-
-# --- SEARCH AGGREGATOR SCHEMAS (Data Going Out to Customer) ---
-class OfferDetail(BaseModel):
-    store_id: int
-    store_name: str
-    price: float
-    stock_quantity: int
-
-class AggregatedSearchResponse(BaseModel):
-    product_id: int
-    product_name: str
-    product_image: Optional[str]
-    best_price: float
-    offers: List[OfferDetail] # Ordered from cheapest to most expensive
+class InventoryUpdate(BaseModel):
+    # All fields are optional because a vendor might only want to update stock, not price
+    price: Optional[Decimal] = Field(default=None, gt=0, max_digits=12, decimal_places=2)
+    stock_quantity: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    is_available: Optional[bool] = None
+    image_url: Optional[str] = Field(default=None, max_length=500, description="S3 or Cloudinary URL for vendor-uploaded product photos")

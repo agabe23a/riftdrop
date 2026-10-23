@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from datetime import datetime, timezone
 
 from app.modules.orders.models import Order, EscrowLedger, OrderState
+from app.core.security import verify_password
 
 class FulfillmentService:
     @staticmethod
@@ -17,11 +18,11 @@ class FulfillmentService:
         if not order:
             raise HTTPException(status_code=404, detail="Order not found or not assigned to you.")
             
-        if order.status != OrderState.RIDER_DISPATCHED and order.status != OrderState.PICKED_UP:
+        if order.status != OrderState.PICKED_UP:
             raise HTTPException(status_code=400, detail="Order is not in a valid state for delivery.")
             
         # 2. Verify the PIN
-        if order.delivery_pin != provided_pin:
+        if not order.delivery_pin_hash or not verify_password(provided_pin, order.delivery_pin_hash):
             raise HTTPException(status_code=401, detail="Incorrect Delivery PIN. Do not hand over the goods.")
             
         # 3. Fetch the Escrow Ledger

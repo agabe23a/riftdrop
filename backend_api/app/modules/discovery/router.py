@@ -1,5 +1,4 @@
 import math
-import random
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -30,7 +29,7 @@ async def search_nearby_products(
     query: str = Query(..., min_length=2),
     user_lat: float = Query(...),
     user_lng: float = Query(...),
-    max_distance_km: float = Query(5.0),
+    max_distance_km: float = Query(5.0, gt=0, le=50),
     db: AsyncSession = Depends(get_db)
 ):
     # 1. Search Catalog
@@ -45,9 +44,10 @@ async def search_nearby_products(
     # 2. Find Available Stock
     inventory_query = (
         select(StoreInventory)
-        .options(selectinload(StoreInventory.store), selectinload(StoreInventory.master_product))
-        .where(StoreInventory.master_product_id.in_(product_ids))
+        .options(selectinload(StoreInventory.store), selectinload(StoreInventory.product))
+        .where(StoreInventory.product_id.in_(product_ids))
         .where(StoreInventory.stock_quantity > 0)
+        .where(StoreInventory.is_available.is_(True))
     )
     available_stock = (await db.execute(inventory_query)).scalars().all()
     
@@ -57,7 +57,8 @@ async def search_nearby_products(
     
     for item in available_stock:
         store = item.store
-        if store.latitude is None or store.longitude is None: continue
+        if not store.is_active:
+            continue
             
         distance = calculate_distance_km(user_lat, user_lng, store.latitude, store.longitude)
         
@@ -67,7 +68,7 @@ async def search_nearby_products(
             
             results.append({
                 "inventory_id": item.id,
-                "product_name": item.master_product.name,
+                "product_name": item.product.name,
                 "store_name": store.name,
                 "store_id": store.id,
                 "distance_km": distance,
@@ -81,27 +82,27 @@ async def search_nearby_products(
     # 4. Sort by Best Value
     results.sort(key=lambda x: x["financials"]["total_checkout_price"])
     
-    # --- 5. THE INNOVATION: PSYCHOLOGICAL UPSELLS ---
-    # We grab a few cheap items (under 150 KES) from the winning stores to tempt the user
+    # Relevant complementary items are deterministic so customer results remain predictable.
     upsells = []
     if store_ids_found:
         upsell_query = (
             select(StoreInventory)
-            .options(selectinload(StoreInventory.master_product))
+            .options(selectinload(StoreInventory.product))
             .where(StoreInventory.store_id.in_(store_ids_found))
             .where(StoreInventory.price <= 150.0) # CHEAP IMPULSE BUYS ONLY
-            .where(StoreInventory.master_product_id.notin_(product_ids)) # Don't upsell what they already searched
-            .limit(10)
+            .where(StoreInventory.product_id.notin_(product_ids))
+            .where(StoreInventory.stock_quantity > 0)
+            .where(StoreInventory.is_available.is_(True))
+            .order_by(StoreInventory.price.asc(), StoreInventory.id.asc())
+            .limit(3)
         )
         potential_upsells = (await db.execute(upsell_query)).scalars().all()
         
-        # Pick 3 random cheap items so the UI always feels fresh and dynamic
         if potential_upsells:
-            selected_upsells = random.sample(potential_upsells, min(3, len(potential_upsells)))
-            for u in selected_upsells:
+            for u in potential_upsells:
                 upsells.append({
                     "inventory_id": u.id,
-                    "product_name": u.master_product.name,
+                    "product_name": u.product.name,
                     "price": u.price,
                     "store_id": u.store_id,
                     "trigger_text": "Perfect with your order"

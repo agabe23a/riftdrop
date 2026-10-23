@@ -9,7 +9,6 @@ class UserCreate(BaseModel):
     phone_number: str = Field(..., description="Phone number starting with country code, e.g., +254...")
     password: str = Field(..., min_length=8, description="Password must be at least 8 characters long")
     full_name: str
-    role: UserRole = UserRole.CUSTOMER
 
 class UserLogin(BaseModel):
     email: EmailStr
